@@ -28,11 +28,15 @@ if [[ -v TARGET ]]; then
 	case "$TARGET" in
 		aarch64*)
 			ARCH=arm64
+			# XXX: OpenSSL, why can't you do this better (blocking Windows builds)
+			CROSS_COMPILE_OPENSSL="linux-aarch64"
 			;;
 		amd64*|x86_64*)
+			CROSS_COMPILE_OPENSSL="linux-x86_64"
 			ARCH=x86_64
 			;;
 		i*86*)
+			CROSS_COMPILE_OPENSSL="linux-x86"
 			ARCH=x86
 			;;
 		*)
@@ -43,6 +47,7 @@ if [[ -v TARGET ]]; then
 else
 	echo "Natively compiling..."
 	CROSS_COMPILE_CONFIGURE=""
+	CROSS_COMPILE_OPENSSL=""
 	case $(uname -m) in
 		aarch64)
 			ARCH=arm64
@@ -107,6 +112,11 @@ mkdir -p "$BUILD_DIR"
 ###
 ### PACKAGES
 ###
+
+setup_dirs() {
+	# only allow one libdir (thanks OpenSSL linux-x86_64 target)
+	ln -s lib "$PREFIX/lib64"
+}
 
 build_kernel_headers() {
 	if [ -f "$PREFIX/kernel_installed" ]; then
@@ -184,29 +194,18 @@ build_libusb() {
 	touch "$PREFIX/libusb_installed"
 }
 
-build_mbedtls() {
-	if [ -f "$PREFIX/mtls_installed" ]; then
+build_openssl() {
+	if [ -f "$PREFIX/openssl_installed" ]; then
 		return
 	fi
-	echo " *** Building mbedTLS ***"
-	download_extract "https://github.com/Mbed-TLS/mbedtls/archive/refs/tags/mbedtls-3.5.0.tar.gz" "mbedtls-mbedtls-3.5.0" "mbedtls-3.5.0.tar.gz"
-	rm -rf build || true
-	mkdir build
-	cd build
-	cmake \
-		-DUSE_SHARED_MBEDTLS_LIBRARY=OFF \
-		-DUSE_STATIC_MBEDTLS_LIBRARY=ON \
-		-DBUILD_SHARED_LIBS=OFF \
-		-DENABLE_TESTING=OFF \
-		-DENABLE_PROGRAMS=OFF \
-		-DCMAKE_INSTALL_PREFIX="$PREFIX" \
-		-DCMAKE_C_COMPILER="$CC" \
-		-DCMAKE_C_FLAGS="$CPPFLAGS" \
-		-DCMAKE_BUILD_TYPE:STRING=Release \
-		..
-	make -j
-	make install
-	touch "$PREFIX/mtls_installed"
+	echo " *** Building openssl ***"
+	download_extract "https://www.openssl.org/source/openssl-3.0.12.tar.gz" "openssl-3.0.12" "openssl-3.0.12.tar.gz"
+	# gross it hardcodes these paths
+	./Configure --prefix="$PREFIX" --openssldir=/usr/local/ssl $CROSS_COMPILE_OPENSSL no-zlib no-autoload-config no-shared no-engine no-module no-dso no-tests
+	make clean
+	make -j build_sw
+	make install_sw
+	touch "$PREFIX/openssl_installed"
 }
 
 build_curl() {
@@ -215,7 +214,7 @@ build_curl() {
 	fi
 	echo " *** Building curl ***"
 	download_extract "https://curl.se/download/curl-8.4.0.tar.gz" "curl-8.4.0" "curl-8.4.0.tar.gz"
-	configure --with-mbedtls="$PREFIX" --with-zlib="$PREFIX" \
+	configure --with-openssl="$PREFIX" --with-zlib="$PREFIX" \
 		--disable-manual --disable-dict --disable-smtp --disable-imap --disable-tftp --disable-ftp --disable-telnet --disable-smb --disable-gopher --disable-ntlm --disable-mqtt --disable-rtsp --disable-pop3
 	# make sure bin/curl is static
 	make clean
@@ -269,7 +268,7 @@ build_imd() {
 	fi
 	echo " *** Building libimobiledevice ***"
 	clone "https://github.com/libimobiledevice/libimobiledevice" "libimobiledevice" "master"
-	autogen --without-cython --with-mbedtls
+	autogen --without-cython --with-openssl
 	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
@@ -315,7 +314,7 @@ build_idr() {
 	echo " *** Building idevicerecovery ***"
 	clone "https://github.com/libimobiledevice/idevicerestore" "idevicerestore" "master"
 	# no OpenSSL is harmless, it only uses it for SHA impl, falls back to bundled
-	autogen --without-openssl
+	autogen --with-openssl
 	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
@@ -337,11 +336,12 @@ build_usbmuxd() {
 	touch "$PREFIX/usbmuxd_installed"
 }
 
+setup_dirs
 build_kernel_headers
 build_zlib
 build_libzip
 build_libusb
-build_mbedtls
+build_openssl
 build_curl
 build_plist
 build_glue
