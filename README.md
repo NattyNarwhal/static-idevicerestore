@@ -1,5 +1,4 @@
-Scaffolding to build a static idevicerestore easily, since all the libraries
-can be pretty daunting to source yourself.
+Scaffolding to build a static idevicerestore easily, since all the libraries can be pretty daunting to source yourself.
 
 ## Requirements
 
@@ -7,7 +6,7 @@ On the host
 
 * A cross-compiler that can make binaries with a static libc
   * Check out musl.cc or the musl-gcc script from your distro (i.e. musl-tools on Debian)
-* usual suspects: autoconf, automake, libtool, pkgconf
+* usual suspects: autoconf, automake, libtool, cmake, pkgconf
 
 ## Building
 
@@ -32,7 +31,10 @@ Any packages will be automatically downloaded, or you can put them manually in `
 
 Serve `$PREFIX/bin/idevicerestore` and `$PREFIX/sbin/usbmuxd` with garnish.
 
+### Tips
+
+* If you run into issues with i.e. `libatomic.la` being in a bogus directory, just blow away `.la` files from your toolchain. libtool is more of a hazard than a help on Linux.
+
 ## Usage
 
-TODO: Figure out how to use the standalone usbmuxd. You want to use a new
-usbmuxd as possible, as old ones might not support your device.
+TODO: Figure out how to use the standalone usbmuxd. You want to use a new usbmuxd as possible, as old ones might not support your device.
