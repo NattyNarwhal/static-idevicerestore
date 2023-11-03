@@ -60,22 +60,15 @@ mkdir -p "$BUILD_DIR"
 ### PACKAGES
 ###
 
-copy_headers() {
+build_kernel_headers() {
 	if [ -f "$PREFIX/kernel_installed" ]; then
 		return
 	fi
 	echo " *** Copying kernel headers ***"
-	mkdir -p "$PREFIX/include/linux" "$PREFIX/include/asm" "$PREFIX/include/asm-generic"
-	# Correct for Linux 6.1
-	cp \
-		/usr/include/linux/{netlink,const,socket,types,posix_types,stddef,magic}.h \
-		"$PREFIX/include/linux"
-	cp \
-		/usr/include/asm-generic/{types,posix_types,int-ll64,bitsperlong}.h \
-		"$PREFIX/include/asm-generic"
-	cp \
-		/usr/include/$(uname -m)-linux-gnu/asm/{types,posix_types,bitsperlong,hwcap}.h \
-		"$PREFIX/include/asm"
+	download_extract "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.5.10.tar.xz" "linux-6.5.10" "linux-6.5.10.tar.xz"
+	make clean
+	# XXX: Specify arch for cross-compile
+	make headers_install INSTALL_HDR_PATH="$PREFIX"
 	touch "$PREFIX/kernel_installed"
 }
 
@@ -282,7 +275,7 @@ build_usbmuxd() {
 	touch "$PREFIX/usbmuxd_installed"
 }
 
-copy_headers # XXX: should take these from a kernel tarball instead of host system (for non-linux)
+build_kernel_headers
 build_zlib
 build_libzip
 build_libusb
