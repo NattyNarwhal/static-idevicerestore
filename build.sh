@@ -79,6 +79,7 @@ build_zlib() {
 	echo " *** Building zlib ***"
 	download_extract "http://zlib.net/zlib-1.3.tar.gz" "zlib-1.3" "zlib-1.3.tar.gz"
 	./configure --static --prefix=/home/calvin/prefix
+	make clean
 	make -j
 	make install
 	touch "$PREFIX/zlib_installed"
@@ -113,6 +114,7 @@ build_libzip() {
 		-DCMAKE_C_FLAGS="$CPPFLAGS" \
 		-DCMAKE_BUILD_TYPE:STRING=Release \
 		..
+	make clean
 	make -j
 	make install
 	touch "$PREFIX/libzip_installed"
@@ -127,6 +129,7 @@ build_libusb() {
 	# XXX: revisit udev later
 	# XXX: needs kernel headers for netlink, hope it's stable...
 	./configure --enable-static --disable-shared --prefix="$PREFIX" --disable-udev
+	make clean
 	make -j
 	make install
 	touch "$PREFIX/libusb_installed"
@@ -152,6 +155,7 @@ build_mbedtls() {
 		-DCMAKE_C_FLAGS="$CPPFLAGS" \
 		-DCMAKE_BUILD_TYPE:STRING=Release \
 		..
+	make clean
 	make -j
 	make install
 	touch "$PREFIX/mtls_installed"
@@ -165,6 +169,7 @@ build_curl() {
 	download_extract "https://curl.se/download/curl-8.4.0.tar.gz" "curl-8.4.0" "curl-8.4.0.tar.gz"
 	./configure --enable-static --disable-shared --prefix="$PREFIX" --with-mbedtls="$PREFIX" --with-zlib="$PREFIX" --disable-manual
 	# make sure bin/curl is static
+	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
 	touch "$PREFIX/curl_installed"
@@ -177,6 +182,7 @@ build_plist() {
 	echo " *** Building libplist ***"
 	clone "https://github.com/libimobiledevice/libplist/" "libplist" "master"
 	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX" --without-tests --without-cython
+	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
 	touch "$PREFIX/plist_installed"
@@ -189,6 +195,7 @@ build_glue() {
 	echo " *** Building libimobiledevice-glue ***"
 	clone "https://github.com/libimobiledevice/libimobiledevice-glue" "libimobiledevice-glue" "master"
 	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX"
+	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
 	touch "$PREFIX/glue_installed"
@@ -201,6 +208,7 @@ build_libusbmuxd() {
 	echo " *** Building libusbmuxd ***"
 	clone "https://github.com/libimobiledevice/libusbmuxd" "libusbmuxd" "master"
 	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX"
+	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
 	touch "$PREFIX/libusbmuxd_installed"
@@ -213,6 +221,7 @@ build_imd() {
 	echo " *** Building libimobiledevice ***"
 	clone "https://github.com/libimobiledevice/libimobiledevice" "libimobiledevice" "master"
 	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX" --without-cython --with-mbedtls
+	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
 	touch "$PREFIX/imd_installed"
@@ -225,6 +234,7 @@ build_editline() {
 	echo " *** Building editline ***"
 	download_extract "ftp://ftp.troglobit.com/editline/editline-1.17.1.tar.gz" "editline-1.17.1" "editline-1.17.1.tar.gz"
 	./configure --enable-static --disable-shared --prefix="$PREFIX" --disable-termcap
+	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
 	# Shim readline
@@ -243,6 +253,7 @@ build_libirecovery() {
 	clone "https://github.com/libimobiledevice/libirecovery" "libirecovery" "master"
 	# XXX: udev?
 	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX" --without-udev
+	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
 	touch "$PREFIX/libirecovery_installed"
@@ -256,6 +267,7 @@ build_idr() {
 	clone "https://github.com/libimobiledevice/idevicerestore" "idevicerestore" "master"
 	# no OpenSSL is harmless, it only uses it for SHA impl, falls back to bundled
 	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX" --without-openssl
+	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
 	touch "$PREFIX/idr_installed"
@@ -270,6 +282,7 @@ build_usbmuxd() {
 	# XXX: no systemd support for now
 	# XXX: udev is going to be janky...
 	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX" --without-systemd --with-udevrulesdir="$PREFIX/udev/rules.d"
+	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
 	touch "$PREFIX/usbmuxd_installed"
