@@ -167,7 +167,8 @@ build_curl() {
 	fi
 	echo " *** Building curl ***"
 	download_extract "https://curl.se/download/curl-8.4.0.tar.gz" "curl-8.4.0" "curl-8.4.0.tar.gz"
-	./configure --enable-static --disable-shared --prefix="$PREFIX" --with-mbedtls="$PREFIX" --with-zlib="$PREFIX" --disable-manual
+	./configure --enable-static --disable-shared --prefix="$PREFIX" --with-mbedtls="$PREFIX" --with-zlib="$PREFIX" \
+		--disable-manual --disable-dict --disable-smtp --disable-imap --disable-tftp --disable-ftp --disable-telnet --disable-smb --disable-gopher --disable-ntlm --disable-mqtt --disable-rtsp --disable-pop3
 	# make sure bin/curl is static
 	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
