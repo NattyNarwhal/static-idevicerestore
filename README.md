@@ -1,28 +1,36 @@
 Scaffolding to build a static idevicerestore easily, since all the libraries
 can be pretty daunting to source yourself.
 
-Cross-compiling isn't tested, probably needs some work.
-
 ## Requirements
 
 On the host
 
-* musl w/ the `musl-gcc` wrapper
-* Kernel headers to pilfer from (this should be done better)
+* A cross-compiler that can make binaries with a static libc
+  * Check out musl.cc or the musl-gcc script from your distro (i.e. musl-tools on Debian)
 * usual suspects: autoconf, automake, libtool, pkgconf
 
 ## Building
 
+* Set `CC` and `LD` to your compiler
 * Set `PREFIX` to a directory that'll hold the files prepared by each `make install`.
 * Set `BUILD_DIR` to a directory that'll hold the tarballs, source, and build detritus.
+* If cross-compiling, set `TARGET` to the build triplet.
 
-Example:
+Example for native musl build:
 
 ```shell
-PREFIX=/home/calvin/prefix BUILD_DIR=/home/calvin/build bash build.sh
+CC=musl-gcc LD=musl-gcc PREFIX=/home/calvin/prefix BUILD_DIR=/home/calvin/build bash build.sh
 ```
 
-Serve `$PREFIX/bin/idevicerestore` and `$PREFIX/bin/usbmuxd` with garnish.
+Example for cross-compile musl build:
+
+```shell
+TARGET=x86_64-linux-musl CC=x86_64-linux-musl-cc LD=x86_64-linux-musl-cc PREFIX=/home/calvin/prefix-amd64 BUILD_DIR=/home/calvin/build bash -x build.sh
+```
+
+Any packages will be automatically downloaded, or you can put them manually in `BUILD_DIR`.
+
+Serve `$PREFIX/bin/idevicerestore` and `$PREFIX/sbin/usbmuxd` with garnish.
 
 ## Usage
 

@@ -19,10 +19,50 @@ if [ ! -d "$BUILD_DIR" ]; then
 	exit 1
 fi
 
-export CC="musl-gcc"
-export LD="musl-gcc"
-# -mno-outline-atomics is to workaround getauxval issue with musl-gcc?
-export CPPFLAGS="-static -I$PREFIX/include -mno-outline-atomics"
+# XXX: Ugly cross-compile stuff begins here
+export CPPFLAGS="-static -I$PREFIX/include"
+# set $ARCH for Linux makefile, hack your ISA in. XXX: better way to map this
+if [[ -v TARGET ]]; then
+	echo "Cross-compiling..."
+	CROSS_COMPILE_CONFIGURE="--host=$TARGET"
+	case "$TARGET" in
+		aarch64*)
+			ARCH=arm64
+			;;
+		amd64*|x86_64*)
+			ARCH=x86_64
+			;;
+		i*86*)
+			ARCH=x86
+			;;
+		*)
+			echo "Please add your architecture to build.sh"
+			exit 1
+			;;
+	esac
+else
+	echo "Natively compiling..."
+	CROSS_COMPILE_CONFIGURE=""
+	case $(uname -m) in
+		aarch64)
+			ARCH=arm64
+			;;
+		amd64|x86_64)
+			ARCH=x86_64
+			;;
+		i*86)
+			ARCH=x86
+			;;
+		*)
+			echo "Please add your architecture to build.sh"
+			exit 1
+			;;
+	esac
+fi
+# -mno-outline-atomics is to workaround getauxval issue with musl-gcc on aarch64 (found in curl)
+if [ "$ARCH" = "arm64" ]; then
+	export CPPFLAGS="$CPPFLAGS -mno-outline-atomics"
+fi
 export LDFLAGS="--static -L$PREFIX/lib"
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
 
@@ -53,6 +93,14 @@ clone() {
 	cd "$name-$tag"
 }
 
+configure() {
+	./configure --enable-static --disable-shared --prefix="$PREFIX" $CROSS_COMPILE_CONFIGURE "$@"
+}
+
+autogen() {
+	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX" $CROSS_COMPILE_CONFIGURE "$@"
+}
+
 mkdir -p "$PREFIX"
 mkdir -p "$BUILD_DIR"
 
@@ -67,8 +115,11 @@ build_kernel_headers() {
 	echo " *** Copying kernel headers ***"
 	download_extract "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.5.10.tar.xz" "linux-6.5.10" "linux-6.5.10.tar.xz"
 	make clean
-	# XXX: Specify arch for cross-compile
-	make headers_install INSTALL_HDR_PATH="$PREFIX"
+	ARCH_VAR=""
+	if [[ -v ARCH ]]; then
+		ARCH_VAR="ARCH=$ARCH"
+	fi
+	make headers_install INSTALL_HDR_PATH="$PREFIX" $ARCH_VAR
 	touch "$PREFIX/kernel_installed"
 }
 
@@ -78,7 +129,7 @@ build_zlib() {
 	fi
 	echo " *** Building zlib ***"
 	download_extract "http://zlib.net/zlib-1.3.tar.gz" "zlib-1.3" "zlib-1.3.tar.gz"
-	./configure --static --prefix=/home/calvin/prefix
+	./configure --static --prefix="$PREFIX"
 	make clean
 	make -j
 	make install
@@ -91,9 +142,9 @@ build_libzip() {
 	fi
 	echo " *** Building libzip ***"
 	download_extract "https://libzip.org/download/libzip-1.10.1.tar.xz" "libzip-1.10.1" "libzip-1.10.1.tar.xz"
-	if [ ! -d build ]; then
-		mkdir build
-	fi
+	# cmake doesn't like leftovers, purge build dir every time
+	rm -rf build || true
+	mkdir build
 	cd build
 	# IPSWs are store iirc, so we can be conservative with enabeld options
 	# allocate buffer is due to small default musl stack sizes
@@ -114,7 +165,6 @@ build_libzip() {
 		-DCMAKE_C_FLAGS="$CPPFLAGS" \
 		-DCMAKE_BUILD_TYPE:STRING=Release \
 		..
-	make clean
 	make -j
 	make install
 	touch "$PREFIX/libzip_installed"
@@ -127,8 +177,7 @@ build_libusb() {
 	echo " *** Building libusb ***"
 	download_extract "https://github.com/libusb/libusb/releases/download/v1.0.26/libusb-1.0.26.tar.bz2" "libusb-1.0.26" "libusb-1.0.26.tar.bz2"
 	# XXX: revisit udev later
-	# XXX: needs kernel headers for netlink, hope it's stable...
-	./configure --enable-static --disable-shared --prefix="$PREFIX" --disable-udev
+	configure --disable-udev
 	make clean
 	make -j
 	make install
@@ -141,9 +190,8 @@ build_mbedtls() {
 	fi
 	echo " *** Building mbedTLS ***"
 	download_extract "https://github.com/Mbed-TLS/mbedtls/archive/refs/tags/mbedtls-3.5.0.tar.gz" "mbedtls-mbedtls-3.5.0" "mbedtls-3.5.0.tar.gz"
-	if [ ! -d build ]; then
-		mkdir build
-	fi
+	rm -rf build || true
+	mkdir build
 	cd build
 	cmake \
 		-DUSE_SHARED_MBEDTLS_LIBRARY=OFF \
@@ -152,10 +200,10 @@ build_mbedtls() {
 		-DENABLE_TESTING=OFF \
 		-DENABLE_PROGRAMS=OFF \
 		-DCMAKE_INSTALL_PREFIX="$PREFIX" \
+		-DCMAKE_C_COMPILER="$CC" \
 		-DCMAKE_C_FLAGS="$CPPFLAGS" \
 		-DCMAKE_BUILD_TYPE:STRING=Release \
 		..
-	make clean
 	make -j
 	make install
 	touch "$PREFIX/mtls_installed"
@@ -167,7 +215,7 @@ build_curl() {
 	fi
 	echo " *** Building curl ***"
 	download_extract "https://curl.se/download/curl-8.4.0.tar.gz" "curl-8.4.0" "curl-8.4.0.tar.gz"
-	./configure --enable-static --disable-shared --prefix="$PREFIX" --with-mbedtls="$PREFIX" --with-zlib="$PREFIX" \
+	configure --with-mbedtls="$PREFIX" --with-zlib="$PREFIX" \
 		--disable-manual --disable-dict --disable-smtp --disable-imap --disable-tftp --disable-ftp --disable-telnet --disable-smb --disable-gopher --disable-ntlm --disable-mqtt --disable-rtsp --disable-pop3
 	# make sure bin/curl is static
 	make clean
@@ -182,7 +230,7 @@ build_plist() {
 	fi
 	echo " *** Building libplist ***"
 	clone "https://github.com/libimobiledevice/libplist/" "libplist" "master"
-	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX" --without-tests --without-cython
+	autogen --without-tests --without-cython
 	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
@@ -195,7 +243,7 @@ build_glue() {
 	fi
 	echo " *** Building libimobiledevice-glue ***"
 	clone "https://github.com/libimobiledevice/libimobiledevice-glue" "libimobiledevice-glue" "master"
-	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX"
+	autogen
 	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
@@ -208,7 +256,7 @@ build_libusbmuxd() {
 	fi
 	echo " *** Building libusbmuxd ***"
 	clone "https://github.com/libimobiledevice/libusbmuxd" "libusbmuxd" "master"
-	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX"
+	autogen
 	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
@@ -221,7 +269,7 @@ build_imd() {
 	fi
 	echo " *** Building libimobiledevice ***"
 	clone "https://github.com/libimobiledevice/libimobiledevice" "libimobiledevice" "master"
-	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX" --without-cython --with-mbedtls
+	autogen --without-cython --with-mbedtls
 	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
@@ -234,7 +282,7 @@ build_editline() {
 	fi
 	echo " *** Building editline ***"
 	download_extract "ftp://ftp.troglobit.com/editline/editline-1.17.1.tar.gz" "editline-1.17.1" "editline-1.17.1.tar.gz"
-	./configure --enable-static --disable-shared --prefix="$PREFIX" --disable-termcap
+	configure --disable-termcap
 	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
@@ -253,7 +301,7 @@ build_libirecovery() {
 	echo " *** Building libirecovery ***"
 	clone "https://github.com/libimobiledevice/libirecovery" "libirecovery" "master"
 	# XXX: udev?
-	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX" --without-udev
+	autogen --without-udev
 	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
@@ -267,7 +315,7 @@ build_idr() {
 	echo " *** Building idevicerecovery ***"
 	clone "https://github.com/libimobiledevice/idevicerestore" "idevicerestore" "master"
 	# no OpenSSL is harmless, it only uses it for SHA impl, falls back to bundled
-	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX" --without-openssl
+	autogen --without-openssl
 	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
@@ -282,7 +330,7 @@ build_usbmuxd() {
 	clone "https://github.com/libimobiledevice/usbmuxd" "usbmuxd" "master"
 	# XXX: no systemd support for now
 	# XXX: udev is going to be janky...
-	./autogen.sh --enable-static --disable-shared --prefix="$PREFIX" --without-systemd --with-udevrulesdir="$PREFIX/udev/rules.d"
+	autogen --without-systemd --with-udevrulesdir="$PREFIX/udev/rules.d"
 	make clean
 	make -j LDFLAGS="$LDFLAGS -all-static"
 	make install
@@ -305,4 +353,4 @@ build_idr
 build_usbmuxd
 
 echo
-echo "Done. Slurp up $PREFIX/bin/idevicerestore and $PREFIX/bin/usbmuxd for distribution."
+echo "Done. Slurp up $PREFIX/bin/idevicerestore and $PREFIX/sbin/usbmuxd for distribution."
